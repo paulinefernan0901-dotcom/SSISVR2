@@ -1,8 +1,0 @@
-CREATE TABLE stud (
-    studid INTEGER PRIMARY KEY,
-    studfname TEXT NOT NULL,
-    studlname TEXT NOT NULL,
-    studgender TEXT,
-    studcourse TEXT
-);
-
