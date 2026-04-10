@@ -68,7 +68,7 @@ public class StudentGUI extends JFrame {
             stmt.execute("CREATE TABLE IF NOT EXISTS colleges (code TEXT PRIMARY KEY, name TEXT)");
             stmt.execute("CREATE TABLE IF NOT EXISTS programs (code TEXT PRIMARY KEY, name TEXT, college_code TEXT, " +
                         "FOREIGN KEY(college_code) REFERENCES colleges(code) ON DELETE SET NULL)");
-            stmt.execute("CREATE TABLE IF NOT EXISTS students (id TEXT PRIMARY KEY, firstname TEXT, lastname TEXT, " +
+            stmt.execute("CREATE TABLE IF NOT EXISTS student (id TEXT PRIMARY KEY, firstname TEXT, lastname TEXT, " +
                         "program_code TEXT, year TEXT, gender TEXT, " +
                         "FOREIGN KEY(program_code) REFERENCES programs(code) ON DELETE SET NULL)");
         } catch (SQLException e) {
@@ -106,14 +106,36 @@ public class StudentGUI extends JFrame {
         JButton delBtn = createButton("Delete");
         ssearch = new JTextField(10);
         JButton searchBtn = createButton("Search");
+        JButton prevBtn = createButton("Prev");
+        JButton nextBtn = createButton("Next");
+
+            buttons.add(prevBtn);
+            buttons.add(nextBtn);
 
         addBtn.addActionListener(e -> addStudent());
         upBtn.addActionListener(e -> updateStudent());
         delBtn.addActionListener(e -> deleteStudent());
         searchBtn.addActionListener(e -> searchStudent(ssearch.getText()));
+        prevBtn.addActionListener(e -> {
+                if (studentPage > 0) {
+                    studentPage--;
+                    loadStudentPaginated();
+                }
+            });
+
+            nextBtn.addActionListener(e -> {
+                studentPage++;
+                loadStudentPaginated();
+            });
+
 
         buttons.add(addBtn); buttons.add(upBtn); buttons.add(delBtn);
         buttons.add(new JLabel(" Search: ")); buttons.add(ssearch); buttons.add(searchBtn);
+
+            JButton genBtn = createButton("Generate 5000");
+            genBtn.addActionListener(e -> generateStudents());
+
+buttons.add(genBtn);
 
         panel.add(form, BorderLayout.NORTH);
         panel.add(new JScrollPane(studentTable), BorderLayout.CENTER);
@@ -168,38 +190,86 @@ public class StudentGUI extends JFrame {
     }
 
     // --- SQL OPERATIONS ---
-
-    void loadStudentsFromSQL() {
-        try (Connection conn = DriverManager.getConnection(DB_URL);
-             PreparedStatement stmt = conn.prepareStatement("SELECT * FROM students")) {
-            ResultSet rs = stmt.executeQuery();
-            studentModel.setRowCount(0);
-            while (rs.next()) {
-                studentModel.addRow(new Object[]{rs.getString("id"), rs.getString("firstname"), 
-                    rs.getString("lastname"), rs.getString("program_code"), rs.getString("year"), rs.getString("gender")});
-            }
-        } catch (SQLException e) { e.printStackTrace(); }
-    }
-
     void addStudent() {
-        String sql = "INSERT INTO students(id, firstname, lastname, program_code, year, gender) VALUES(?,?,?,?,?,?)";
-        try (Connection conn = DriverManager.getConnection(DB_URL);
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, sid.getText());
-            pstmt.setString(2, sfname.getText());
-            pstmt.setString(3, slname.getText());
-            pstmt.setString(4, sprogram.getText());
-            pstmt.setString(5, syear.getText());
-            pstmt.setString(6, sgender.getText());
-            pstmt.executeUpdate();
-            loadStudentsFromSQL();
-            clearStudentFields();
-            JOptionPane.showMessageDialog(this, "Student Added!");
-        } catch (SQLException e) { JOptionPane.showMessageDialog(this, "Error: " + e.getMessage()); }
-    }
+    String sql = "INSERT INTO student(id, firstname, lastname, course, year, gender) VALUES(?,?,?,?,?,?)";
 
+    try (Connection conn = DriverManager.getConnection(DB_URL);
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+        pstmt.setString(1, sid.getText());
+        pstmt.setString(2, sfname.getText());
+        pstmt.setString(3, slname.getText());
+        pstmt.setString(4, sprogram.getText());
+        pstmt.setInt(5, Integer.parseInt(syear.getText())); // better
+        pstmt.setString(6, sgender.getText());
+
+        pstmt.executeUpdate();
+
+        loadStudentsPaginated(); // 👈 THIS is the pagination part
+        clearStudentFields();
+
+        JOptionPane.showMessageDialog(this, "Student Added!");
+
+    } catch (Exception e) {
+        JOptionPane.showMessageDialog(this, "Error: " + e.getMessage());
+    }
+}
+
+   void loadStudentPaginated() {
+
+    String sql = "SELECT * FROM student LIMIT ? OFFSET ?";
+
+    try (Connection conn = DriverManager.getConnection(DB_URL);
+         PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+        stmt.setInt(1, PAGE_SIZE);
+        stmt.setInt(2, studentPage * PAGE_SIZE);
+
+        ResultSet rs = stmt.executeQuery();
+
+        studentModel.setRowCount(0);
+
+        while (rs.next()) {
+            studentModel.addRow(new Object[]{
+                rs.getString("id"),
+                rs.getString("firstname"),
+                rs.getString("lastname"),
+                rs.getString("course"),
+                rs.getInt("year"),
+                rs.getString("gender")
+            });
+        }
+
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+}
+    void addStudent() {
+    String sql = "INSERT INTO student(id, firstname, lastname, course, year, gender) VALUES(?,?,?,?,?,?)";
+
+    try (Connection conn = DriverManager.getConnection(DB_URL);
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+        pstmt.setString(1, sid.getText());
+        pstmt.setString(2, sfname.getText());
+        pstmt.setString(3, slname.getText());
+        pstmt.setString(4, sprogram.getText());
+        pstmt.setInt(5, Integer.parseInt(syear.getText())); // better
+        pstmt.setString(6, sgender.getText());
+
+        pstmt.executeUpdate();
+
+        loadStudentsPaginated(); // 👈 THIS is the pagination part
+        clearStudentFields();
+
+        JOptionPane.showMessageDialog(this, "Student Added!");
+
+    } catch (Exception e) {
+        JOptionPane.showMessageDialog(this, "Error: " + e.getMessage());
+    }
+}
     void updateStudent() {
-        String sql = "UPDATE students SET firstname=?, lastname=?, program_code=?, year=?, gender=? WHERE id=?";
+        String sql = "UPDATE student SET firstname=?, lastname=?, program_code=?, year=?, gender=? WHERE id=?";
         try (Connection conn = DriverManager.getConnection(DB_URL);
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, sfname.getText());
@@ -209,7 +279,7 @@ public class StudentGUI extends JFrame {
             pstmt.setString(5, sgender.getText());
             pstmt.setString(6, sid.getText());
             pstmt.executeUpdate();
-            loadStudentsFromSQL();
+            loadStudentFromSQL();
             JOptionPane.showMessageDialog(this, "Updated!");
         } catch (SQLException e) { e.printStackTrace(); }
     }
@@ -219,15 +289,15 @@ public class StudentGUI extends JFrame {
         if (r == -1) return;
         String id = studentModel.getValueAt(r, 0).toString();
         try (Connection conn = DriverManager.getConnection(DB_URL);
-             PreparedStatement pstmt = conn.prepareStatement("DELETE FROM students WHERE id=?")) {
+             PreparedStatement pstmt = conn.prepareStatement("DELETE FROM student WHERE id=?")) {
             pstmt.setString(1, id);
             pstmt.executeUpdate();
-            loadStudentsFromSQL();
+            loadStudentFromSQL();
         } catch (SQLException e) { e.printStackTrace(); }
     }
 
     void searchStudent(String query) {
-        String sql = "SELECT * FROM students WHERE id LIKE ? OR lastname LIKE ?";
+        String sql = "SELECT * FROM student WHERE id LIKE ? OR lastname LIKE ?";
         try (Connection conn = DriverManager.getConnection(DB_URL);
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, "%"+query+"%");
@@ -240,6 +310,7 @@ public class StudentGUI extends JFrame {
             }
         } catch (SQLException e) { e.printStackTrace(); }
     }
+
 
     // --- PROGRAM & COLLEGE OPS ---
 
@@ -324,3 +395,5 @@ public class StudentGUI extends JFrame {
         sprogram.setText(""); syear.setText(""); sgender.setText("");
     }
 }
+
+    
